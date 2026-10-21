@@ -1,0 +1,59 @@
+name: Build VisionClicker APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'VisionClicker5.zip'
+      - '.github/workflows/build.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android SDK
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Extract project
+        run: |
+          mkdir source
+          unzip -q VisionClicker5.zip -d source
+          PROJECT_DIR="$(find "$GITHUB_WORKSPACE/source" -name settings.gradle.kts -printf '%h\n' | head -n 1)"
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "Project files not found in ZIP"
+            exit 1
+          fi
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      - name: Install Gradle and build APK
+        run: |
+          wget -q https://services.gradle.org/distributions/gradle-8.13-bin.zip -O /tmp/gradle.zip
+          unzip -q /tmp/gradle.zip -d /tmp
+          export PATH="/tmp/gradle-8.13/bin:$PATH"
+          cd "$PROJECT_DIR"
+          gradle wrapper --gradle-version 8.13
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug
+          cp app/build/outputs/apk/debug/app-debug.apk "$GITHUB_WORKSPACE/app-debug.apk"
+
+      - name: Save APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: VisionClicker-APK
+          path: app-debug.apk
+          
